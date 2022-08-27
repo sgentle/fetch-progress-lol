@@ -1,0 +1,64 @@
+<!doctype html>
+
+<button id="button">download</button>
+<progress id="progress" hidden></progress>
+
+<script>
+  async function download(url) {
+    let downloaded = 0
+    let size = null
+
+    async function handleSize() {
+      const response = await fetch(url, {
+        method: "HEAD",
+
+        // This is the correct way to set accept-encoding, per https://fetch.spec.whatwg.org/#http-network-or-cache-fetch
+        headers: {range: 'bytes=0-'}
+      })
+
+      size = response.headers.get('content-length')
+
+      console.log('uncompressed size', size)
+
+      progress.max = size
+      progress.value = downloaded
+    }
+
+    async function handleContent() {
+      // Disable caching because it's a demo
+      const response = await fetch(url, {cache: 'reload'})
+
+      console.log('compressed size', response.headers.get('content-length'))
+
+      const reader = response.body.getReader()
+
+      while (true) {
+        const {value, done} = await reader.read()
+        if (done) break
+
+        downloaded += value.length
+        if (size) progress.value = downloaded
+      }
+    }
+
+    // Need to make sure that we initiate the content download before the size request
+    // (to avoid head-of-line blocking)
+    await Promise.all([handleContent(), handleSize()])
+  }
+
+  async function go() {
+    while (true) {
+      await new Promise(resolve => button.addEventListener('click', resolve))
+
+      progress.hidden = false
+      button.disabled = true
+      progress.removeAttribute('value')
+
+      await download('shakespeare.txt')
+      button.disabled = false
+    }
+  }
+
+  go()
+
+</script>
